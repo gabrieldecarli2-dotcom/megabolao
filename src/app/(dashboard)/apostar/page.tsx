@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/shared/Navbar'
@@ -14,7 +14,7 @@ type Palpite = {
   editando: boolean
 }
 
-export default function ApostarPage() {
+function ApostarContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
@@ -388,5 +388,17 @@ export default function ApostarPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ApostarPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Carregando...</div>
+      </div>
+    }>
+      <ApostarContent />
+    </Suspense>
   )
 }
