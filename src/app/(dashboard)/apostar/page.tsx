@@ -49,6 +49,7 @@ function ApostarContent() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mercado_pago_pix')
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null)
   const [erroPagamento, setErroPagamento] = useState('')
+  const [statusPagamentoMsg, setStatusPagamentoMsg] = useState('')
   const urlProcessed = useRef(false)
 
   useEffect(() => {
@@ -89,6 +90,63 @@ function ApostarContent() {
     ])
     window.history.replaceState({}, '', '/apostar')
   }, [loading])
+
+  useEffect(() => {
+    if (!sucesso || paymentResult?.method !== 'mercado_pago_pix' || paymentResult.status !== 'pending') return
+
+    let cancelled = false
+
+    async function syncPaymentStatus() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token || !paymentResult?.id) return
+
+        setStatusPagamentoMsg('Verificando pagamento...')
+
+        await fetch('/api/payments/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        const { data: payment } = await supabase
+          .from('payments')
+          .select('status, expires_at, qr_code, qr_code_base64, ticket_url')
+          .eq('id', paymentResult.id)
+          .maybeSingle()
+
+        if (cancelled || !payment) return
+
+        setPaymentResult(prev => prev ? {
+          ...prev,
+          status: payment.status || prev.status,
+          expiresAt: payment.expires_at || prev.expiresAt,
+          qrCode: payment.qr_code || prev.qrCode,
+          qrCodeBase64: payment.qr_code_base64 || prev.qrCodeBase64,
+          ticketUrl: payment.ticket_url || prev.ticketUrl,
+        } : prev)
+
+        if (payment.status === 'paid') {
+          setStatusPagamentoMsg('Pagamento confirmado! Suas participacoes ja estao pagas.')
+        } else if (payment.status === 'cancelled' || payment.status === 'expired') {
+          setStatusPagamentoMsg('Esse QR Code expirou ou foi cancelado. Gere um novo pagamento para participar.')
+        } else {
+          setStatusPagamentoMsg('Aguardando compensacao do Pix...')
+        }
+      } catch {
+        if (!cancelled) setStatusPagamentoMsg('Ainda aguardando o pagamento. Se ja pagou, aguarde alguns segundos.')
+      }
+    }
+
+    syncPaymentStatus()
+    const interval = window.setInterval(syncPaymentStatus, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [sucesso, paymentResult?.id, paymentResult?.method, paymentResult?.status])
 
   function toggleNum(n: number) {
     if (selected.includes(n)) {
@@ -177,6 +235,7 @@ function ApostarContent() {
       }
 
       setPaymentResult(result.payment as PaymentResult)
+      setStatusPagamentoMsg(paymentMethod === 'mercado_pago_pix' ? 'Aguardando pagamento do Pix...' : '')
       setSucesso(true)
       sessionStorage.removeItem('carrinho_palpites')
       setConfirming(false)
@@ -201,9 +260,15 @@ function ApostarContent() {
       <div className="min-h-screen bg-gray-50">
         <Navbar nomeUsuario={user?.nome || ''} />
         <div className="max-w-lg mx-auto p-6 pb-28 md:pb-6 text-center mt-16">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Participacoes registradas!</h2>
-          <p className="text-gray-500 text-sm mb-6">{palpites.length} palpite(s) salvo(s) com sucesso.</p>
+          <div className="text-6xl mb-4">{paymentResult?.status === 'paid' ? '✅' : '🎉'}</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {paymentResult?.status === 'paid' ? 'Pagamento confirmado!' : 'Participacoes registradas!'}
+          </h2>
+          <p className="text-gray-500 text-sm mb-6">
+            {paymentResult?.status === 'paid'
+              ? 'Suas participacoes ja estao pagas e entraram no bolao.'
+              : `${palpites.length} palpite(s) salvo(s) com sucesso.`}
+          </p>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4 text-left">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">
               {paymentResult?.method === 'mercado_pago_pix' ? 'Pix online' : 'Pagamento manual'}
@@ -252,11 +317,16 @@ function ApostarContent() {
                     Abrir pagina do pagamento
                   </a>
                 )}
+                {statusPagamentoMsg && (
+                  <div className="mt-3 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-semibold text-blue-700">
+                    {statusPagamentoMsg}
+                  </div>
+                )}
               </div>
             )}
 
             {paymentResult?.status === 'paid' && (
-              <div className="text-xs text-green-700 mt-3 bg-green-50 border border-green-100 rounded-xl px-3 py-2">
+              <div className="text-xs text-green-700 mt-3 bg-green-50 border border-green-100 rounded-xl px-3 py-2 font-semibold">
                 Pagamento aprovado automaticamente. Suas participacoes ja entraram como pagas.
               </div>
             )}
