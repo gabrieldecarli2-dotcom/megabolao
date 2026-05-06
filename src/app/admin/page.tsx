@@ -306,16 +306,61 @@ export default function AdminPage() {
   }
 
   async function salvarRodada() {
-    if (!round) return
     const ticketPrice = Number(valorParticipacao)
+    if (!nomeRodada.trim()) {
+      alert('Informe o nome da rodada.')
+      return
+    }
     if (!Number.isFinite(ticketPrice) || ticketPrice <= 0) {
       alert('Informe um valor de participacao valido.')
       return
     }
     setSalvandoRodada(true)
+
+    if (!round) {
+      const { data: nova, error } = await supabase.from('rounds').insert({
+        nome: nomeRodada.trim(),
+        status: 'open',
+        start_date: inicioRodada || null,
+        end_date: fimRodada || null,
+        end_time: fimRodadaHora || null,
+        ticket_price: ticketPrice,
+      }).select().single()
+
+      if (error) {
+        setSalvandoRodada(false)
+        alert(error.message.includes('end_time')
+          ? 'Não foi possível salvar o horário. Rode a migration que cria a coluna end_time na tabela rounds.'
+          : 'Erro ao criar rodada: ' + error.message)
+        return
+      }
+
+      const { error: prizeError } = await supabase.from('prize_rules').insert([
+        { round_id: nova.id, prize_type: 'first10', percentage: 50 },
+        { round_id: nova.id, prize_type: 'firstDraw', percentage: 7 },
+        { round_id: nova.id, prize_type: 'second', percentage: 18 },
+        { round_id: nova.id, prize_type: 'last', percentage: 13 },
+        { round_id: nova.id, prize_type: 'admin', percentage: 12 },
+      ])
+
+      if (prizeError) {
+        setSalvandoRodada(false)
+        alert('A rodada foi criada, mas nao foi possivel salvar a premiacao padrao: ' + prizeError.message)
+        return
+      }
+
+      const { data: rounds } = await supabase.from('rounds').select('*').order('created_at', { ascending: false })
+      setAllRounds(rounds || [])
+      setSelectedRoundId(nova.id)
+      await loadRoundData(nova.id)
+      setSalvandoRodada(false)
+      alert('Rodada criada com sucesso!')
+      return
+    }
+
     const { error } = await supabase
       .from('rounds')
-      .update({ nome: nomeRodada, start_date: inicioRodada, end_date: fimRodada, end_time: fimRodadaHora || null, ticket_price: ticketPrice })
+      .update({ nome: nomeRodada.trim(), start_date: inicioRodada, end_date: fimRodada, end_time: fimRodadaHora || null, ticket_price: ticketPrice })
       .eq('id', round.id)
     setSalvandoRodada(false)
 
@@ -1322,9 +1367,14 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wide">Editar Rodada</div>
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wide">{round ? 'Editar Rodada' : 'Criar Primeira Rodada'}</div>
                   <RoundSelector />
                 </div>
+                {!round && (
+                  <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                    Nenhuma rodada cadastrada. Preencha os dados abaixo e clique em criar para iniciar o teste real.
+                  </div>
+                )}
                 <div className="space-y-3">
                   <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nome</label><input value={nomeRodada} onChange={e => setNomeRodada(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                   <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Valor por participacao</label><input type="number" min="1" step="0.01" value={valorParticipacao} onChange={e => setValorParticipacao(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
@@ -1333,7 +1383,7 @@ export default function AdminPage() {
                     <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Encerramento dos palpites</label><input type="date" value={fimRodada} onChange={e => setFimRodada(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                     <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Horario</label><input type="time" value={fimRodadaHora} onChange={e => setFimRodadaHora(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                   </div>
-                  <button onClick={salvarRodada} disabled={salvandoRodada} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-50">{salvandoRodada ? 'Salvando...' : 'Salvar alteracoes'}</button>
+                  <button onClick={salvarRodada} disabled={salvandoRodada} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-50">{salvandoRodada ? 'Salvando...' : (round ? 'Salvar alteracoes' : 'Criar rodada')}</button>
                 </div>
               </div>
 
