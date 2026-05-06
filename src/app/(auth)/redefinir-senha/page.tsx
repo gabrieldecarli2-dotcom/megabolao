@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Eye, EyeOff, Lock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -45,9 +46,7 @@ export default function RedefinirSenhaPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="mb-6">
-          <div className="text-3xl font-black tracking-widest">
-            <span className="text-yellow-400">MEGA</span><span className="text-blue-600">BOLÃO</span>
-          </div>
+          <Image src="/logo.png" alt="MegaBolão" width={360} height={80} className="h-12 w-auto max-w-[220px] object-contain" priority />
           <h1 className="mt-6 text-2xl font-black text-gray-900">Redefinir senha</h1>
           <p className="mt-1 text-sm text-gray-500">Crie uma nova senha para acessar sua conta.</p>
         </div>

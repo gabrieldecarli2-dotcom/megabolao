@@ -42,12 +42,14 @@ export default function AdminPage() {
   const [inicioRodada, setInicioRodada] = useState('')
   const [fimRodada, setFimRodada] = useState('')
   const [fimRodadaHora, setFimRodadaHora] = useState('')
+  const [valorParticipacao, setValorParticipacao] = useState('50')
   const [salvandoRodada, setSalvandoRodada] = useState(false)
 
   const [novaRodadaNome, setNovaRodadaNome] = useState('')
   const [novaRodadaInicio, setNovaRodadaInicio] = useState('')
   const [novaRodadaFim, setNovaRodadaFim] = useState('')
   const [novaRodadaFimHora, setNovaRodadaFimHora] = useState('')
+  const [novaRodadaValor, setNovaRodadaValor] = useState('50')
   const [criandoRodada, setCriandoRodada] = useState(false)
   const [msgNovaRodada, setMsgNovaRodada] = useState('')
 
@@ -79,9 +81,10 @@ export default function AdminPage() {
     setInicioRodada(rodada.start_date || '')
     setFimRodada(rodada.end_date || '')
     setFimRodadaHora(rodada.end_time?.slice(0, 5) || '')
+    setValorParticipacao(String(rodada.ticket_price || 50))
 
     const { data: participacoes } = await supabase
-      .from('entries').select('*, users(nome, telefone, pix_key)')
+      .from('entries').select('*, users(nome, telefone, pix_key), payments(id, method, status, amount, entry_count, expires_at, ticket_url, mercado_pago_status, mercado_pago_status_detail)')
       .eq('round_id', roundId).order('total_hits', { ascending: false })
 
     const { data: sorteios } = await supabase
@@ -220,13 +223,41 @@ export default function AdminPage() {
     setMsgPremiacao('Premiacao salva com sucesso!')
   }
 
-  async function aprovarPagamento(entryId: string) {
-    await supabase.from('entries').update({ payment_status: 'paid' }).eq('id', entryId)
+  async function aprovarPagamento(entry: any) {
+    if (entry.payment_id) {
+      await supabase
+        .from('payments')
+        .update({ status: 'paid', paid_at: new Date().toISOString(), cancelled_at: null, updated_at: new Date().toISOString() })
+        .eq('id', entry.payment_id)
+
+      await supabase
+        .from('entries')
+        .update({ payment_status: 'paid' })
+        .eq('payment_id', entry.payment_id)
+        .neq('payment_status', 'paid')
+    } else {
+      await supabase.from('entries').update({ payment_status: 'paid' }).eq('id', entry.id)
+    }
+
     await loadRoundData(selectedRoundId)
   }
 
-  async function cancelarPagamento(entryId: string) {
-    await supabase.from('entries').update({ payment_status: 'cancelled' }).eq('id', entryId)
+  async function cancelarPagamento(entry: any) {
+    if (entry.payment_id) {
+      await supabase
+        .from('payments')
+        .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', entry.payment_id)
+
+      await supabase
+        .from('entries')
+        .update({ payment_status: 'cancelled' })
+        .eq('payment_id', entry.payment_id)
+        .eq('payment_status', 'pending')
+    } else {
+      await supabase.from('entries').update({ payment_status: 'cancelled' }).eq('id', entry.id)
+    }
+
     await loadRoundData(selectedRoundId)
   }
 
@@ -276,10 +307,15 @@ export default function AdminPage() {
 
   async function salvarRodada() {
     if (!round) return
+    const ticketPrice = Number(valorParticipacao)
+    if (!Number.isFinite(ticketPrice) || ticketPrice <= 0) {
+      alert('Informe um valor de participacao valido.')
+      return
+    }
     setSalvandoRodada(true)
     const { error } = await supabase
       .from('rounds')
-      .update({ nome: nomeRodada, start_date: inicioRodada, end_date: fimRodada, end_time: fimRodadaHora || null })
+      .update({ nome: nomeRodada, start_date: inicioRodada, end_date: fimRodada, end_time: fimRodadaHora || null, ticket_price: ticketPrice })
       .eq('id', round.id)
     setSalvandoRodada(false)
 
@@ -305,11 +341,16 @@ export default function AdminPage() {
 
   async function criarNovaRodada() {
     if (!novaRodadaNome) { setMsgNovaRodada('Informe o nome da nova rodada.'); return }
+    const ticketPrice = Number(novaRodadaValor)
+    if (!Number.isFinite(ticketPrice) || ticketPrice <= 0) {
+      setMsgNovaRodada('Informe um valor de participacao valido.')
+      return
+    }
     setCriandoRodada(true)
     setMsgNovaRodada('')
     const { data: nova, error } = await supabase.from('rounds').insert({
       nome: novaRodadaNome, status: 'open',
-      start_date: novaRodadaInicio || null, end_date: novaRodadaFim || null, end_time: novaRodadaFimHora || null, ticket_price: 50,
+      start_date: novaRodadaInicio || null, end_date: novaRodadaFim || null, end_time: novaRodadaFimHora || null, ticket_price: ticketPrice,
     }).select().single()
     if (error) {
       setMsgNovaRodada(error.message.includes('end_time')
@@ -327,7 +368,7 @@ export default function AdminPage() {
       { round_id: nova.id, prize_type: 'admin', percentage: 12 },
     ])
     setMsgNovaRodada('Nova rodada criada com sucesso!')
-    setNovaRodadaNome(''); setNovaRodadaInicio(''); setNovaRodadaFim(''); setNovaRodadaFimHora('')
+    setNovaRodadaNome(''); setNovaRodadaInicio(''); setNovaRodadaFim(''); setNovaRodadaFimHora(''); setNovaRodadaValor('50')
     setCriandoRodada(false)
     const { data: rounds } = await supabase.from('rounds').select('*').order('created_at', { ascending: false })
     setAllRounds(rounds || [])
@@ -442,7 +483,8 @@ export default function AdminPage() {
 
   const totalPago = entries.filter(e => e.payment_status === 'paid').length
   const totalPendente = entries.filter(e => e.payment_status === 'pending').length
-  const receitaTotal = totalPago * 50
+  const valorRodada = Number(round?.ticket_price || 50)
+  const receitaTotal = totalPago * valorRodada
   const encerrada = round?.status === 'finished'
   const paidEntries = entries.filter(e => e.payment_status === 'paid')
   const vencedores = paidEntries.filter(e => (e.total_hits || 0) >= 10)
@@ -594,7 +636,9 @@ export default function AdminPage() {
       <nav className="bg-gray-900 text-white sticky top-0 z-40 shadow">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="font-black text-xl tracking-widest"><span className="text-yellow-400">MEGA</span>BOLAO</h1>
+            <a href="/admin" className="flex shrink-0 items-center" aria-label="MegaBolão Admin">
+              <img src="/logo.png" alt="MegaBolão" className="h-9 w-auto max-w-[160px] object-contain sm:h-10 sm:max-w-[180px]" />
+            </a>
             <span className="text-xs bg-yellow-400 text-gray-900 font-bold px-2 py-0.5 rounded-full">ADMIN</span>
           </div>
           <div className="flex items-center gap-3">
@@ -761,6 +805,7 @@ export default function AdminPage() {
                 <button
                   onClick={() => {
                     const dataHoje = new Date().toLocaleDateString('pt-BR')
+                    const logoUrl = `${window.location.origin}/logo.png`
                     const naoVencedoresLocal = paidEntries.filter((e: any) => (e.total_hits || 0) < 10)
                     const menorPtsLocal = naoVencedoresLocal.length > 0 ? Math.min(...naoVencedoresLocal.map((e: any) => e.total_hits || 0)) : -1
                     const maiorPtsNVLocal = naoVencedoresLocal.length > 0 ? Math.max(...naoVencedoresLocal.map((e: any) => e.total_hits || 0)) : -1
@@ -835,8 +880,8 @@ export default function AdminPage() {
                       </head>
                       <body>
                         <div style="margin-bottom:14px">
-                          <div style="font-size:20px;font-weight:900;letter-spacing:2px">
-                            <span style="color:#f59e0b">MEGA</span><span style="color:#1e3a8a">BOLAO</span>
+                          <div style="display:flex;justify-content:center;align-items:center;background:#2563eb;border-radius:14px;padding:14px 18px;margin-bottom:10px">
+                            <img src="${logoUrl}" alt="MegaBolao" style="display:block;width:180px;height:auto" />
                           </div>
                           <div style="font-size:15px;font-weight:700;margin-top:2px">${round?.nome}</div>
                           <div style="font-size:10px;color:#6b7280;margin-top:2px">
@@ -963,8 +1008,40 @@ export default function AdminPage() {
               <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="text-xs text-gray-500">{round?.nome}</div>
                 {round?.status !== 'finished' && (
-                  <button onClick={async () => { await supabase.from('entries').update({ payment_status: 'paid' }).eq('payment_status', 'pending').eq('round_id', round.id); await loadRoundData(selectedRoundId) }}
-                    className="text-xs bg-green-100 text-green-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-green-200 transition">Aprovar todos pendentes</button>
+                  <button onClick={async () => {
+                    const manualPaymentIds = Array.from(new Set(
+                      entries
+                        .filter((entry: any) => entry.payment_status === 'pending' && entry.payment_id && (entry.payments?.method || 'manual') === 'manual')
+                        .map((entry: any) => entry.payment_id)
+                    ))
+
+                    const legacyEntryIds = entries
+                      .filter((entry: any) => entry.payment_status === 'pending' && !entry.payment_id)
+                      .map((entry: any) => entry.id)
+
+                    if (manualPaymentIds.length > 0) {
+                      await supabase
+                        .from('payments')
+                        .update({ status: 'paid', paid_at: new Date().toISOString(), cancelled_at: null, updated_at: new Date().toISOString() })
+                        .in('id', manualPaymentIds)
+
+                      await supabase
+                        .from('entries')
+                        .update({ payment_status: 'paid' })
+                        .in('payment_id', manualPaymentIds)
+                        .eq('payment_status', 'pending')
+                    }
+
+                    if (legacyEntryIds.length > 0) {
+                      await supabase
+                        .from('entries')
+                        .update({ payment_status: 'paid' })
+                        .in('id', legacyEntryIds)
+                    }
+
+                    await loadRoundData(selectedRoundId)
+                  }}
+                    className="text-xs bg-green-100 text-green-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-green-200 transition">Aprovar pendentes manuais</button>
                 )}
               </div>
               {filteredParticipantGroups.length === 0 && <div className="p-12 text-center text-gray-400 text-sm">Nenhum participante encontrado</div>}
@@ -1035,6 +1112,8 @@ export default function AdminPage() {
                             const isAwarded = prizeItems.length > 0
                             const prizePaid = entry.prize_status === 'paid'
                             const entryPrizeTotal = prizeItems.reduce((total, item) => total + item.value, 0)
+                            const paymentMethod = entry.payments?.method || 'manual'
+                            const isOnlinePix = paymentMethod === 'mercado_pago_pix'
 
                             return (
                               <div key={entry.id} className={'p-4 flex flex-col gap-3 sm:flex-row sm:items-center ' + (isAwarded ? 'bg-yellow-50/80 border-l-4 border-yellow-400' : '')}>
@@ -1044,12 +1123,34 @@ export default function AdminPage() {
                                     <span className={'text-xs font-bold px-2 py-0.5 rounded-full ' + (entry.payment_status === 'paid' ? 'bg-green-100 text-green-700' : entry.payment_status === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-700')}>
                                       {entry.payment_status === 'paid' ? 'Pago' : entry.payment_status === 'cancelled' ? 'Cancelado' : 'Pendente'}
                                     </span>
+                                    <span className={'text-xs font-bold px-2 py-0.5 rounded-full ' + (isOnlinePix ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600')}>
+                                      {isOnlinePix ? 'Pix online' : 'Manual'}
+                                    </span>
                                     {isAwarded && (
                                       <span className={'text-xs font-bold px-2 py-0.5 rounded-full ' + (prizePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600')}>
                                         {prizePaid ? 'Prêmio pago' : 'Aguardando premiação'}
                                       </span>
                                     )}
                                   </div>
+                                  {isOnlinePix && entry.payment_status === 'pending' && (
+                                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-blue-700">
+                                      {entry.payments?.expires_at && (
+                                        <span className="rounded-full bg-blue-50 px-2 py-1 font-semibold border border-blue-100">
+                                          Expira em {new Date(entry.payments.expires_at).toLocaleString('pt-BR')}
+                                        </span>
+                                      )}
+                                      {entry.payments?.ticket_url && (
+                                        <a
+                                          href={entry.payments.ticket_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="rounded-full bg-white px-2 py-1 font-semibold border border-blue-200 hover:bg-blue-50 transition"
+                                        >
+                                          Abrir QR
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
                                   {isAwarded && (
                                     <div className="mb-2 flex flex-wrap gap-1">
                                       {prizeItems.map((item) => (
@@ -1075,13 +1176,13 @@ export default function AdminPage() {
                                     <div className="text-xs text-gray-400">acertos</div>
                                   </div>
                                   <div className="flex flex-wrap justify-end gap-1">
-                                    {entry.payment_status === 'pending' && round?.status !== 'finished' && (
+                                    {entry.payment_status === 'pending' && round?.status !== 'finished' && !isOnlinePix && (
                                       <>
-                                        <button onClick={() => aprovarPagamento(entry.id)} className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-1.5 rounded-lg hover:bg-green-200 transition">Aprovar</button>
-                                        <button onClick={() => cancelarPagamento(entry.id)} className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-1.5 rounded-lg hover:bg-red-200 transition">Cancelar</button>
+                                        <button onClick={() => aprovarPagamento(entry)} className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-1.5 rounded-lg hover:bg-green-200 transition">Aprovar</button>
+                                        <button onClick={() => cancelarPagamento(entry)} className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-1.5 rounded-lg hover:bg-red-200 transition">Cancelar</button>
                                       </>
                                     )}
-                                    {isAwarded && !prizePaid && (
+                                  {isAwarded && !prizePaid && (
                                       <button onClick={() => marcarPremioPago(entry.id)} className="text-xs bg-yellow-400 text-gray-900 font-bold px-2 py-1.5 rounded-lg hover:bg-yellow-300 transition">Prêmio pago</button>
                                     )}
                                   </div>
@@ -1189,10 +1290,14 @@ export default function AdminPage() {
               <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
                 <div className="font-bold text-green-800 text-base mb-1">🚀 Iniciar Nova Rodada</div>
                 <p className="text-green-700 text-sm mb-4">Rodada atual encerrada.</p>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nome</label>
                     <input value={novaRodadaNome} onChange={e => setNovaRodadaNome(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: Bolao Junho 2025" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Valor</label>
+                    <input type="number" min="1" step="0.01" value={novaRodadaValor} onChange={e => setNovaRodadaValor(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="50.00" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Abertura</label>
@@ -1222,6 +1327,7 @@ export default function AdminPage() {
                 </div>
                 <div className="space-y-3">
                   <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nome</label><input value={nomeRodada} onChange={e => setNomeRodada(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                  <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Valor por participacao</label><input type="number" min="1" step="0.01" value={valorParticipacao} onChange={e => setValorParticipacao(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                   <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Inicio</label><input type="date" value={inicioRodada} onChange={e => setInicioRodada(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Encerramento dos palpites</label><input type="date" value={fimRodada} onChange={e => setFimRodada(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -65,9 +66,7 @@ export default function AuthCallbackPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
       <div className="rounded-2xl border border-gray-100 bg-white px-8 py-6 text-center shadow-sm">
-        <div className="mb-2 text-2xl font-black tracking-widest">
-          <span className="text-yellow-400">MEGA</span><span className="text-blue-600">BOLÃO</span>
-        </div>
+        <Image src="/logo.png" alt="MegaBolão" width={360} height={80} className="mx-auto mb-2 h-10 w-auto max-w-[180px] object-contain" priority />
         <div className="text-sm font-semibold text-gray-500">{message}</div>
       </div>
     </div>

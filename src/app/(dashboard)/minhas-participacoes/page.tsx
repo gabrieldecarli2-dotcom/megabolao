@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/shared/Navbar'
@@ -23,13 +24,23 @@ export default function MinhasParticipacoes() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) { router.push('/login'); return }
       await closeExpiredRounds()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (session?.access_token) {
+        await fetch('/api/payments/sync-pending', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+      }
 
       const { data: profile } = await supabase
         .from('users').select('*').eq('id', authUser.id).single()
 
       const { data: entries } = await supabase
         .from('entries')
-        .select('*, rounds(id, nome, status, start_date, end_date, end_time)')
+        .select('*, rounds(id, nome, status, start_date, end_date, end_time, ticket_price), payments(id, method, status, amount, entry_count, expires_at, qr_code, qr_code_base64, ticket_url)')
         .eq('user_id', authUser.id)
         .order('created_at', { ascending: false })
 
@@ -186,6 +197,12 @@ export default function MinhasParticipacoes() {
               if (cancelledOrder !== 0) return cancelledOrder
               return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
             })
+            const paymentGroupCounts = sortedEntries.reduce((acc: Record<string, number>, entry: any) => {
+              if (entry.payment_id) {
+                acc[entry.payment_id] = (acc[entry.payment_id] || 0) + 1
+              }
+              return acc
+            }, {})
             const paidEntries = entries.filter(entry => entry.payment_status === 'paid')
             const drawn = drawnByRound[round.id] || []
             const isExpanded = expandedRound === round.id
@@ -243,6 +260,13 @@ export default function MinhasParticipacoes() {
                       const prizeLabels = prizesByEntry[entry.id] || []
                       const isPrizeEntry = prizeLabels.length > 0
                       const prizePaid = entry.prize_status === 'paid'
+                      const payment = entry.payments
+                      const paymentMethod = payment?.method || 'manual'
+                      const isOnlinePix = paymentMethod === 'mercado_pago_pix'
+                      const isFirstEntryOfPayment = entry.payment_id
+                        ? sortedEntries.findIndex((item: any) => item.payment_id === entry.payment_id) === index
+                        : true
+                      const paymentCount = entry.payment_id ? paymentGroupCounts[entry.payment_id] || 1 : 1
 
                       return (
                         <div key={entry.id} className={'p-5 ' + (isPrizeEntry ? 'bg-yellow-50/70 border-l-4 border-yellow-400' : '')}>
@@ -274,6 +298,9 @@ export default function MinhasParticipacoes() {
                             <div className="flex items-center gap-3">
                               <span className={'text-xs font-semibold px-3 py-1 rounded-full ' + status.color}>
                                 {status.label}
+                              </span>
+                              <span className={'text-xs font-semibold px-3 py-1 rounded-full ' + (isOnlinePix ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600')}>
+                                {isOnlinePix ? 'Pix online' : 'Manual'}
                               </span>
                               {drawn.length > 0 && (
                                 <div className="text-right">
@@ -313,15 +340,64 @@ export default function MinhasParticipacoes() {
                             </div>
                           )}
 
-                          {entry.payment_status === 'pending' && (
+                          {entry.payment_status === 'pending' && paymentMethod === 'manual' && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2.5 text-xs text-yellow-700 mt-3">
-                              Pagamento pendente — envie R$50,00 via PIX para <strong>11999999999</strong>
+                              Pagamento manual pendente — combine com o admin para pagar em dinheiro e aguarde a aprovacao.
+                            </div>
+                          )}
+
+                          {entry.payment_status === 'pending' && isOnlinePix && isFirstEntryOfPayment && (
+                            <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                              <div className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                                Pix online pendente para {paymentCount} participacao(es)
+                              </div>
+                              {payment?.qr_code_base64 && (
+                                <Image
+                                  src={`data:image/png;base64,${payment.qr_code_base64}`}
+                                  alt="QR Code Pix"
+                                  width={176}
+                                  height={176}
+                                  unoptimized
+                                  className="mt-3 h-44 w-44 rounded-2xl border border-blue-100 bg-white p-3"
+                                />
+                              )}
+                              {payment?.qr_code && (
+                                <div className="mt-3 rounded-xl border border-white/80 bg-white px-4 py-3">
+                                  <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Copia e cola Pix</div>
+                                  <div className="break-all font-mono text-[11px] text-gray-700">{payment.qr_code}</div>
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(payment.qr_code || '')}
+                                    className="mt-3 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition"
+                                  >
+                                    Copiar codigo
+                                  </button>
+                                </div>
+                              )}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {payment?.ticket_url && (
+                                  <a
+                                    href={payment.ticket_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                                  >
+                                    Abrir pagina do pagamento
+                                  </a>
+                                )}
+                                {payment?.expires_at && (
+                                  <span className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-blue-700 border border-blue-100">
+                                    Expira em {new Date(payment.expires_at).toLocaleString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
 
                           {entry.payment_status === 'cancelled' && (
                             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-xs text-red-600 mt-3">
-                              Participacao cancelada por falta de pagamento.
+                              {payment?.status === 'expired'
+                                ? 'O QR Code Pix expirou sem pagamento e a participacao foi cancelada.'
+                                : 'Participacao cancelada por falta de pagamento.'}
                             </div>
                           )}
 

@@ -26,9 +26,9 @@ export default function Navbar({ nomeUsuario }: { nomeUsuario: string }) {
       <nav className="bg-blue-600 text-white sticky top-0 z-40 shadow">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
 
-          <h1 className="font-black text-xl tracking-widest shrink-0">
-            <span className="text-yellow-400">MEGA</span>BOLÃO
-          </h1>
+          <a href="/dashboard" className="flex shrink-0 items-center" aria-label="MegaBolão">
+            <img src="/logo.png" alt="MegaBolão" className="h-9 w-auto max-w-[160px] object-contain sm:h-10 sm:max-w-[180px]" />
+          </a>
 
           <div className="hidden md:flex items-center gap-1">
             {links.map((link) => {

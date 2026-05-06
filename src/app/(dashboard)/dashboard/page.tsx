@@ -124,7 +124,8 @@ export default function DashboardPage() {
   const melhorEntry = paidEntries[0] || null
   const melhoresAcertos = melhorEntry ? (melhorEntry.total_hits || 0) : null
   const rankingPrivado = round?.status === 'open'
-  const receitaTotal = totalParticipantes * 50
+  const valorParticipacao = Number(round?.ticket_price || 50)
+  const receitaTotal = totalParticipantes * valorParticipacao
   const premioVisivel = prizeRules !== null
   const premioFirst10 = receitaTotal * (prizeRules?.first10 ?? 50) / 100
   const premioFirstDraw = receitaTotal * (prizeRules?.firstDraw ?? 7) / 100
@@ -433,7 +434,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm text-center">
-                  <div className="text-4xl mb-3">🤑</div>
+                  <div className="text-4xl mb-3">⏳</div>
                   <h3 className="font-bold text-gray-700 mb-1">
                   {lastDraw ? 'Aguardando proximo sorteio' : round.status === 'closed' ? 'Aguardando primeiro sorteio' : 'Aguardando sorteio'}
                   </h3>

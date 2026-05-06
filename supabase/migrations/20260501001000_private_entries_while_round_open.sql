@@ -30,7 +30,7 @@ using (
     and exists (
       select 1
       from public.rounds r
-      where r.id = round_id
+      where r.id = public.entries.round_id
         and r.status <> 'open'
     )
   )

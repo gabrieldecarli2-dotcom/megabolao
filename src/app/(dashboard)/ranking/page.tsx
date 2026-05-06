@@ -165,7 +165,8 @@ export default function RankingPage() {
   )
 
   const rankingPrivado = round?.status === 'open'
-  const receitaTotal = totalPaidEntries * 50
+  const valorParticipacao = Number(round?.ticket_price || 50)
+  const receitaTotal = totalPaidEntries * valorParticipacao
   const encerrada = round?.status === 'finished'
   const vencedores = ranking.filter(e => (e.total_hits || 0) >= 10)
   const naoVencedores = ranking.filter(e => (e.total_hits || 0) < 10)

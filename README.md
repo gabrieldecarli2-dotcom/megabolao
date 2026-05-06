@@ -57,7 +57,29 @@ npm run dev
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+MERCADO_PAGO_ACCESS_TOKEN=TEST-xxxxxxxx
+MERCADO_PAGO_WEBHOOK_SECRET=chave-secreta-do-webhook
+MERCADO_PAGO_PIX_EXPIRATION_MINUTES=360
+MERCADO_PAGO_TEST_PAYER_FIRST_NAME=APRO
+MERCADO_PAGO_TEST_PAYER_EMAIL=test@testuser.com
 ```
+
+### Mercado Pago Pix
+No painel do Mercado Pago:
+
+1. Crie a aplicação e use as credenciais de teste.
+2. Confirme que a chave Pix da conta está ativa.
+3. Em `Webhooks`, cadastre a URL:
+   `https://SEU-DOMINIO.com/api/mercado-pago/webhook`
+4. Selecione o evento `Order (Mercado Pago)`.
+5. Copie a chave secreta gerada pelo webhook e salve em `MERCADO_PAGO_WEBHOOK_SECRET`.
+
+Observações:
+- `MERCADO_PAGO_TEST_PAYER_FIRST_NAME=APRO` ajuda a aprovar pagamentos automaticamente em ambiente de teste.
+- `MERCADO_PAGO_TEST_PAYER_EMAIL=test@testuser.com` ajuda a homologar o Pix sandbox com os dados esperados pelo Mercado Pago.
+- Para homologação real do webhook, a URL precisa ser pública e HTTPS.
+- O pagamento online usa um QR Code por carrinho de palpites, não por participação individual.
 
 ## Banco de Dados (Supabase)
 
