@@ -87,7 +87,7 @@ O projeto usa cron-job.org para consultar automaticamente o último resultado da
 
 - Rota protegida: `/api/cron/mega-sena-sync`
 - API consultada: `https://loteriascaixa-api.herokuapp.com/api/megasena/latest`
-- URL do job: `https://mega-bolao-top.vercel.app/api/cron/mega-sena-sync`
+- URL do job: `https://mega-bolao-b.vercel.app/api/cron/mega-sena-sync`
 - Método: `GET`
 - Header: `Authorization: Bearer SEU_CRON_SECRET`
 - Timezone: `America/Sao_Paulo`
