@@ -36,6 +36,7 @@ export default function AdminPage() {
   const [dataSorteio, setDataSorteio] = useState('')
   const [numerosSorteio, setNumerosSorteio] = useState('')
   const [salvandoSorteio, setSalvandoSorteio] = useState(false)
+  const [buscandoResultado, setBuscandoResultado] = useState(false)
   const [msgSorteio, setMsgSorteio] = useState('')
 
   const [nomeRodada, setNomeRodada] = useState('')
@@ -266,16 +267,42 @@ export default function AdminPage() {
     await loadRoundData(selectedRoundId)
   }
 
-  async function salvarSorteio() {
-    if (!concurso || !dataSorteio || !numerosSorteio) return
+  async function registrarSorteio(payload: { contestNumber: string; drawDate: string; numbers: number[]; source: 'manual' | 'api' }) {
+    if (!round) {
+      setMsgSorteio('Nenhuma rodada selecionada.')
+      return
+    }
+
     setSalvandoSorteio(true)
     setMsgSorteio('')
-    const nums = numerosSorteio.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+
+    const nums = payload.numbers
     if (nums.length !== 6) { setMsgSorteio('Informe exatamente 6 numeros.'); setSalvandoSorteio(false); return }
+
+    const hasRepeatedNumber = new Set(nums).size !== nums.length
+    if (hasRepeatedNumber) {
+      setMsgSorteio('Os 6 numeros sorteados nao podem repetir.')
+      setSalvandoSorteio(false)
+      return
+    }
+
+    const existingDraw = draws.find((draw: any) => String(draw.contest_number) === String(payload.contestNumber))
+    if (existingDraw) {
+      setMsgSorteio('Concurso ' + payload.contestNumber + ' ja esta registrado nesta rodada.')
+      setSalvandoSorteio(false)
+      return
+    }
+
+    if (round.start_date && payload.drawDate < round.start_date) {
+      setMsgSorteio('O concurso encontrado e anterior ao inicio desta rodada. Confira antes de registrar.')
+      setSalvandoSorteio(false)
+      return
+    }
+
     const isFirst = draws.length === 0
     const { data: draw, error } = await supabase
       .from('draw_results')
-      .insert({ round_id: round.id, contest_number: concurso, draw_date: dataSorteio, numbers: nums, source: 'manual', is_first: isFirst })
+      .insert({ round_id: round.id, contest_number: payload.contestNumber, draw_date: payload.drawDate, numbers: nums, source: payload.source, is_first: isFirst })
       .select().single()
     if (error) { setMsgSorteio('Erro ao salvar sorteio.'); setSalvandoSorteio(false); return }
     const todosNumerosAteAgora = Array.from(new Set([...allDrawnNumbers, ...nums]))
@@ -303,6 +330,72 @@ export default function AdminPage() {
     setConcurso(''); setDataSorteio(''); setNumerosSorteio('')
     setSalvandoSorteio(false)
     await loadRoundData(selectedRoundId)
+  }
+
+  async function salvarSorteio() {
+    if (!concurso || !dataSorteio || !numerosSorteio) return
+
+    const nums = numerosSorteio.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+    await registrarSorteio({
+      contestNumber: concurso.trim(),
+      drawDate: dataSorteio,
+      numbers: nums,
+      source: 'manual',
+    })
+  }
+
+  async function buscarResultadoMegaSena(registrarAutomaticamente = false) {
+    if (!round) {
+      setMsgSorteio('Crie ou selecione uma rodada antes de buscar o resultado.')
+      return
+    }
+
+    setBuscandoResultado(true)
+    setMsgSorteio('')
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setMsgSorteio('Sua sessao expirou. Entre novamente para buscar o resultado.')
+        return
+      }
+
+      const response = await fetch('/api/mega-sena/latest', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        setMsgSorteio(result?.error || 'Erro ao buscar resultado da Mega-Sena.')
+        return
+      }
+
+      const numbers = Array.isArray(result.numbers) ? result.numbers.map(Number) : []
+      setConcurso(String(result.contestNumber || ''))
+      setDataSorteio(String(result.drawDate || ''))
+      setNumerosSorteio(numbers.map((number: number) => String(number).padStart(2, '0')).join(', '))
+
+      const alreadyRegistered = draws.some((draw: any) => String(draw.contest_number) === String(result.contestNumber))
+      if (alreadyRegistered) {
+        setMsgSorteio('Concurso ' + result.contestNumber + ' encontrado, mas ele ja esta registrado nesta rodada.')
+      } else if (registrarAutomaticamente) {
+        await registrarSorteio({
+          contestNumber: String(result.contestNumber),
+          drawDate: String(result.drawDate),
+          numbers,
+          source: 'api',
+        })
+      } else {
+        setMsgSorteio('Resultado encontrado: concurso ' + result.contestNumber + '. Confira os numeros e clique em registrar.')
+      }
+    } catch {
+      setMsgSorteio('Erro ao consultar a API da Mega-Sena.')
+    } finally {
+      setBuscandoResultado(false)
+    }
   }
 
   async function salvarRodada() {
@@ -1281,6 +1374,27 @@ export default function AdminPage() {
                 ) : (
                   <div className="space-y-3">
                     {draws.length === 0 && <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">Este sera o <strong>1° sorteio</strong> desta rodada — definira o premio de mais acertos!</div>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => buscarResultadoMegaSena(false)}
+                        disabled={buscandoResultado || salvandoSorteio}
+                        className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                      >
+                        {buscandoResultado ? 'Buscando...' : 'Buscar para conferir'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => buscarResultadoMegaSena(true)}
+                        disabled={buscandoResultado || salvandoSorteio}
+                        className="w-full rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {buscandoResultado || salvandoSorteio ? 'Processando...' : 'Buscar e registrar'}
+                      </button>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+                      A busca preenche os campos abaixo usando a API Loterias CAIXA. Confira o concurso e os numeros antes de registrar.
+                    </div>
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Numero do Concurso</label>
                       <input value={concurso} onChange={e => setConcurso(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: 2705" />
@@ -1293,7 +1407,7 @@ export default function AdminPage() {
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">6 numeros sorteados</label>
                       <input value={numerosSorteio} onChange={e => setNumerosSorteio(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: 04, 09, 14, 26, 33, 58" />
                     </div>
-                    {msgSorteio && <div className={'text-sm rounded-xl px-4 py-3 ' + (msgSorteio.includes('Erro') ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200')}>{msgSorteio}</div>}
+                    {msgSorteio && <div className={'text-sm rounded-xl px-4 py-3 ' + (/erro|anterior|ja esta|expirou|informe/i.test(msgSorteio) ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200')}>{msgSorteio}</div>}
                     <button onClick={salvarSorteio} disabled={salvandoSorteio} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
                       {salvandoSorteio ? 'Calculando...' : 'Registrar e Calcular Acertos'}
                     </button>
