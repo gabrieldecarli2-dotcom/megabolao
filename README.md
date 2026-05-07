@@ -83,14 +83,18 @@ Observações:
 - O pagamento online usa um QR Code por carrinho de palpites, não por participação individual.
 
 ### Resultados automáticos da Mega-Sena
-O projeto usa Vercel Cron para consultar automaticamente o último resultado da Mega-Sena.
+O projeto usa cron-job.org para consultar automaticamente o último resultado da Mega-Sena.
 
 - Rota protegida: `/api/cron/mega-sena-sync`
 - API consultada: `https://loteriascaixa-api.herokuapp.com/api/megasena/latest`
-- Agendamento em `vercel.json`: uma vez por dia às 00:00 UTC, que equivale a 21h no horário de Brasília.
+- URL do job: `https://mega-bolao-top.vercel.app/api/cron/mega-sena-sync`
+- Método: `GET`
+- Header: `Authorization: Bearer SEU_CRON_SECRET`
+- Timezone: `America/Sao_Paulo`
+- Agendamento recomendado: a cada 15 minutos entre 21h e 01h.
 - A rota consulta `dataProximoConcurso` e só tenta registrar quando hoje é a data prevista do próximo concurso e já passou das 21h em Brasília.
 - Se o resultado já tiver sido publicado e a API já mudou `dataProximoConcurso`, a rota também registra quando `data` do último concurso for hoje.
-- Configure `CRON_SECRET` na Vercel para proteger a rota. A Vercel envia esse valor automaticamente no header `Authorization`.
+- Configure `CRON_SECRET` na Vercel para proteger a rota.
 - O cron só registra sorteios em rodada `closed`. Antes de buscar o resultado, ele roda o fechamento automático de rodadas vencidas.
 - Se o concurso já estiver registrado, nada é duplicado.
 
