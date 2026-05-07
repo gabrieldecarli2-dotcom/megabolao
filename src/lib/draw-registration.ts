@@ -17,6 +17,55 @@ function uniqueSortedNumbers(numbers: number[]) {
     .sort((a, b) => a - b)
 }
 
+function getBrazilDateTimeParts() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+    hour12: false,
+  }).formatToParts(new Date())
+
+  const getPart = (type: string) => parts.find((part) => part.type === type)?.value || ''
+
+  return {
+    date: `${getPart('year')}-${getPart('month')}-${getPart('day')}`,
+    hour: Number(getPart('hour')),
+  }
+}
+
+function shouldTryAutomaticRegistration(latestResult: MegaSenaLatestResult) {
+  const brazilNow = getBrazilDateTimeParts()
+  const isAfterDrawPublicationWindow = brazilNow.hour >= 21 || brazilNow.hour <= 1
+
+  if (!isAfterDrawPublicationWindow) {
+    return {
+      shouldRun: false,
+      reason: 'before_21_brt',
+      brazilNow,
+    }
+  }
+
+  const isExpectedDrawDate = latestResult.nextDrawDate === brazilNow.date
+  const latestDrawIsToday = latestResult.drawDate === brazilNow.date
+
+  if (!isExpectedDrawDate && !latestDrawIsToday) {
+    return {
+      shouldRun: false,
+      reason: 'not_expected_draw_date',
+      brazilNow,
+    }
+  }
+
+  return {
+    shouldRun: true,
+    reason: null,
+    brazilNow,
+  }
+}
+
 export async function registerDrawForRound(payload: RegisterDrawPayload) {
   const supabaseAdmin = getSupabaseAdmin()
   const numbers = uniqueSortedNumbers(payload.numbers)
@@ -135,6 +184,17 @@ export async function registerLatestMegaSenaDrawFromCron() {
   await supabaseAdmin.rpc('close_expired_rounds')
 
   const latestResult: MegaSenaLatestResult = await fetchLatestMegaSenaResult()
+  const automaticRegistrationCheck = shouldTryAutomaticRegistration(latestResult)
+
+  if (!automaticRegistrationCheck.shouldRun) {
+    return {
+      status: 'skipped',
+      reason: automaticRegistrationCheck.reason,
+      brazilNow: automaticRegistrationCheck.brazilNow,
+      latestResult,
+      registration: null,
+    }
+  }
 
   const { data: round } = await supabaseAdmin
     .from('rounds')
@@ -149,6 +209,7 @@ export async function registerLatestMegaSenaDrawFromCron() {
     return {
       status: 'skipped',
       reason: 'no_closed_round',
+      brazilNow: automaticRegistrationCheck.brazilNow,
       latestResult,
       registration: null,
     }
@@ -165,6 +226,7 @@ export async function registerLatestMegaSenaDrawFromCron() {
   return {
     status: registration.status,
     reason: registration.reason,
+    brazilNow: automaticRegistrationCheck.brazilNow,
     latestResult,
     registration,
   }

@@ -3,6 +3,9 @@ export type MegaSenaLatestResult = {
   drawDate: string
   numbers: number[]
   originalDate: string
+  nextContestNumber: string | null
+  nextDrawDate: string | null
+  originalNextDrawDate: string | null
   source: string
 }
 
@@ -38,8 +41,10 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
 
   const result = await response.json()
   const drawDate = parseBrazilianDate(result?.data)
+  const nextDrawDate = parseBrazilianDate(result?.dataProximoConcurso)
   const numbers = parseNumbers(result?.dezenas)
   const contestNumber = result?.concurso ? String(result.concurso) : ''
+  const nextContestNumber = result?.proximoConcurso ? String(result.proximoConcurso) : null
 
   if (!contestNumber || !drawDate || numbers.length !== 6) {
     throw new Error('A API retornou um resultado incompleto.')
@@ -50,6 +55,9 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
     drawDate,
     numbers,
     originalDate: result.data,
+    nextContestNumber,
+    nextDrawDate,
+    originalNextDrawDate: result.dataProximoConcurso || null,
     source: MEGA_SENA_LATEST_URL,
   }
 }
