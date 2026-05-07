@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/mega-sena-sync",
+      "schedule": "*/30 22-23 * * *"
+    },
+    {
+      "path": "/api/cron/mega-sena-sync",
+      "schedule": "*/30 0-3 * * *"
+    }
+  ]
+}

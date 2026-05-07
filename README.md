@@ -63,6 +63,7 @@ MERCADO_PAGO_WEBHOOK_SECRET=chave-secreta-do-webhook
 MERCADO_PAGO_PIX_EXPIRATION_MINUTES=360
 MERCADO_PAGO_TEST_PAYER_FIRST_NAME=APRO
 MERCADO_PAGO_TEST_PAYER_EMAIL=test@testuser.com
+CRON_SECRET=uma-chave-aleatoria-com-mais-de-16-caracteres
 ```
 
 ### Mercado Pago Pix
@@ -80,6 +81,16 @@ Observações:
 - `MERCADO_PAGO_TEST_PAYER_EMAIL=test@testuser.com` ajuda a homologar o Pix sandbox com os dados esperados pelo Mercado Pago.
 - Para homologação real do webhook, a URL precisa ser pública e HTTPS.
 - O pagamento online usa um QR Code por carrinho de palpites, não por participação individual.
+
+### Resultados automáticos da Mega-Sena
+O projeto usa Vercel Cron para consultar automaticamente o último resultado da Mega-Sena.
+
+- Rota protegida: `/api/cron/mega-sena-sync`
+- API consultada: `https://loteriascaixa-api.herokuapp.com/api/megasena/latest`
+- Agendamento em `vercel.json`: a cada 30 minutos, todos os dias, entre 19h e 00h no horário de Brasília.
+- Configure `CRON_SECRET` na Vercel para proteger a rota. A Vercel envia esse valor automaticamente no header `Authorization`.
+- O cron só registra sorteios em rodada `closed`. Antes de buscar o resultado, ele roda o fechamento automático de rodadas vencidas.
+- Se o concurso já estiver registrado, nada é duplicado.
 
 ## Banco de Dados (Supabase)
 
@@ -350,3 +361,8 @@ npx vercel --prod
 Configurar no painel da Vercel:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `MERCADO_PAGO_ACCESS_TOKEN`
+- `MERCADO_PAGO_WEBHOOK_SECRET`
+- `MERCADO_PAGO_PIX_EXPIRATION_MINUTES`
+- `CRON_SECRET`
