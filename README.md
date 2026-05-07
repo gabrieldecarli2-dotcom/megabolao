@@ -87,7 +87,7 @@ O projeto usa Vercel Cron para consultar automaticamente o último resultado da 
 
 - Rota protegida: `/api/cron/mega-sena-sync`
 - API consultada: `https://loteriascaixa-api.herokuapp.com/api/megasena/latest`
-- Agendamento em `vercel.json`: a cada 15 minutos, todos os dias, entre 21h e 01h no horário de Brasília.
+- Agendamento em `vercel.json`: uma vez por dia às 00:00 UTC, que equivale a 21h no horário de Brasília.
 - A rota consulta `dataProximoConcurso` e só tenta registrar quando hoje é a data prevista do próximo concurso e já passou das 21h em Brasília.
 - Se o resultado já tiver sido publicado e a API já mudou `dataProximoConcurso`, a rota também registra quando `data` do último concurso for hoje.
 - Configure `CRON_SECRET` na Vercel para proteger a rota. A Vercel envia esse valor automaticamente no header `Authorization`.

@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/mega-sena-sync",
-      "schedule": "*/15 0-4 * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
