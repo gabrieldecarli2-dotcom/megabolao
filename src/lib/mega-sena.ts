@@ -13,6 +13,7 @@ export type MegaSenaLatestResult = {
 const CAIXA_MEGA_SENA_LATEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
 const CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/'
 const FALLBACK_MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
+const FALLBACK_MEGA_SENA_CONTEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena'
 
 function parseBrazilianDate(date: unknown) {
   if (typeof date !== 'string') return null
@@ -122,8 +123,28 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
 
   try {
     const fallbackResult = await fetchJson(FALLBACK_MEGA_SENA_LATEST_URL)
+    const normalizedFallback = normalizeFallbackResult(fallbackResult)
+
+    if (normalizedFallback.nextContestNumber) {
+      try {
+        const nextContestResult = await fetchJson(`${FALLBACK_MEGA_SENA_CONTEST_URL}/${normalizedFallback.nextContestNumber}`)
+        const normalizedNextContest = normalizeFallbackResult(nextContestResult)
+
+        if (Number(normalizedNextContest.contestNumber) > Number(normalizedFallback.contestNumber)) {
+          return {
+            ...normalizedNextContest,
+            source: `${FALLBACK_MEGA_SENA_CONTEST_URL}/${normalizedFallback.nextContestNumber}`,
+            providerErrors,
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido ao buscar proximo concurso no fallback.'
+        providerErrors.push(`fallback_next_contest: ${message}`)
+      }
+    }
+
     return {
-      ...normalizeFallbackResult(fallbackResult),
+      ...normalizedFallback,
       providerErrors,
     }
   } catch (error) {
