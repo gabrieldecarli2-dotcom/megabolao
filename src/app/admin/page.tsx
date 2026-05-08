@@ -24,6 +24,13 @@ export default function AdminPage() {
   const [userSearch, setUserSearch] = useState('')
   const [usersPage, setUsersPage] = useState(1)
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([])
+  const [novoUsuarioNome, setNovoUsuarioNome] = useState('')
+  const [novoUsuarioEmail, setNovoUsuarioEmail] = useState('')
+  const [novoUsuarioTelefone, setNovoUsuarioTelefone] = useState('')
+  const [novoUsuarioSenha, setNovoUsuarioSenha] = useState('')
+  const [novoUsuarioRole, setNovoUsuarioRole] = useState<'user' | 'admin'>('user')
+  const [criandoUsuario, setCriandoUsuario] = useState(false)
+  const [msgNovoUsuario, setMsgNovoUsuario] = useState('')
   const [allDrawnNumbers, setAllDrawnNumbers] = useState<number[]>([])
   const [firstDrawWinnerIds, setFirstDrawWinnerIds] = useState<string[]>([])
   const [firstDrawWinners, setFirstDrawWinners] = useState<string[]>([])
@@ -200,6 +207,65 @@ export default function AdminPage() {
         prizePaidCount: awardedEntries.filter((entry: any) => entry.prize_status === 'paid').length,
       }
     }))
+  }
+
+  async function criarUsuarioAdmin() {
+    setCriandoUsuario(true)
+    setMsgNovoUsuario('')
+
+    try {
+      if (!novoUsuarioNome.trim() || !novoUsuarioEmail.trim() || !novoUsuarioSenha) {
+        setMsgNovoUsuario('Informe nome, email e senha.')
+        return
+      }
+
+      if (novoUsuarioSenha.length < 6) {
+        setMsgNovoUsuario('A senha precisa ter pelo menos 6 caracteres.')
+        return
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setMsgNovoUsuario('Sua sessao expirou. Entre novamente para criar usuarios.')
+        return
+      }
+
+      const response = await fetch('/api/admin/users/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          nome: novoUsuarioNome,
+          email: novoUsuarioEmail,
+          telefone: novoUsuarioTelefone,
+          password: novoUsuarioSenha,
+          role: novoUsuarioRole,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setMsgNovoUsuario(result?.error || 'Nao foi possivel criar o usuario.')
+        return
+      }
+
+      setNovoUsuarioNome('')
+      setNovoUsuarioEmail('')
+      setNovoUsuarioTelefone('')
+      setNovoUsuarioSenha('')
+      setNovoUsuarioRole('user')
+      setUsersPage(1)
+      setMsgNovoUsuario('Usuario criado com sucesso!')
+      await loadUsersData()
+    } catch {
+      setMsgNovoUsuario('Erro inesperado ao criar usuario.')
+    } finally {
+      setCriandoUsuario(false)
+    }
   }
 
   async function handleRoundChange(roundId: string) {
@@ -1546,6 +1612,48 @@ export default function AdminPage() {
 
         {tab === 'usuarios' && (
           <div>
+            <div className="mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="mb-4">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wide">Cadastrar usuario manualmente</div>
+                <div className="text-sm text-gray-500 mt-1">Crie o login do usuario e informe uma senha temporaria para primeiro acesso.</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nome</label>
+                  <input value={novoUsuarioNome} onChange={e => setNovoUsuarioNome(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome completo" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Email</label>
+                  <input type="email" value={novoUsuarioEmail} onChange={e => setNovoUsuarioEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="usuario@email.com" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Perfil</label>
+                  <select value={novoUsuarioRole} onChange={e => setNovoUsuarioRole(e.target.value === 'admin' ? 'admin' : 'user')} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="user">Usuario</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">WhatsApp</label>
+                  <input value={novoUsuarioTelefone} onChange={e => setNovoUsuarioTelefone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="(11) 99999-9999" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Senha temporaria</label>
+                  <input type="text" value={novoUsuarioSenha} onChange={e => setNovoUsuarioSenha(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Minimo 6 caracteres" />
+                </div>
+                <div className="flex items-end">
+                  <button onClick={criarUsuarioAdmin} disabled={criandoUsuario} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                    {criandoUsuario ? 'Criando...' : 'Criar usuario'}
+                  </button>
+                </div>
+              </div>
+              {msgNovoUsuario && (
+                <div className={'mt-4 text-sm rounded-xl px-4 py-3 ' + (msgNovoUsuario.includes('sucesso') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200')}>
+                  {msgNovoUsuario}
+                </div>
+              )}
+            </div>
+
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <div className="text-sm font-bold text-gray-700">Usuarios cadastrados</div>
