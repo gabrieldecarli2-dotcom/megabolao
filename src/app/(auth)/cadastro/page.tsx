@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Eye, EyeOff, Lock, Mail, Phone, UserRound } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { formatWhatsapp } from '@/lib/phone'
 
 export default function CadastroPage() {
   const router = useRouter()
@@ -162,9 +163,10 @@ export default function CadastroPage() {
                 <input
                   type="tel"
                   value={telefone}
-                  onChange={e => setTelefone(e.target.value)}
+                  onChange={e => setTelefone(formatWhatsapp(e.target.value))}
                   className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
                 />
               </div>
             </div>

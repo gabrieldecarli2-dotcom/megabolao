@@ -295,6 +295,49 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <details className="group mb-6 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-gradient-to-r from-blue-50 to-yellow-50 px-5 py-4">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wide text-blue-600">Saiba como funciona</div>
+                  <div className="mt-0.5 text-sm font-semibold text-gray-700">Entenda as participacoes, pagamentos, sorteios e premiacoes.</div>
+                </div>
+                <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-black text-white transition group-open:rotate-180">▼</span>
+              </summary>
+              <div className="grid gap-4 border-t border-blue-50 p-5 md:grid-cols-2">
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="text-xs font-black uppercase tracking-wide text-gray-400">1. Periodo de palpites</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Quando uma nova rodada abre, voce pode cadastrar suas participacoes ate o prazo definido pelo admin.
+                    Cada participacao custa <strong className="text-blue-600">R${valorParticipacao.toFixed(2)}</strong>.
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="text-xs font-black uppercase tracking-wide text-gray-400">2. Escolha dos numeros</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Em cada participacao, escolha <strong>10 numeros de 01 a 60</strong>. Voce pode participar com quantas participacoes quiser.
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="text-xs font-black uppercase tracking-wide text-gray-400">3. Pagamento</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    O pagamento pode ser feito por Pix online direto no site ou manualmente com o administrador. Apos o encerramento, participacoes pagas sao validadas e as nao pagas sao canceladas.
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="text-xs font-black uppercase tracking-wide text-gray-400">4. Sorteios e ranking</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    A rodada acompanha os sorteios da Mega-Sena a partir do proximo concurso apos o fim dos palpites. A cada sorteio, o ranking e os acertos sao atualizados automaticamente.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 md:col-span-2">
+                  <div className="text-xs font-black uppercase tracking-wide text-yellow-700">Premiacao</div>
+                  <p className="mt-2 text-sm leading-6 text-yellow-900">
+                    Quem completar 10 acertos primeiro ganha o premio principal. Tambem existem premios para quem acertar mais numeros no primeiro sorteio, para o segundo colocado e para o ultimo colocado. Em caso de empate ou mais de um ganhador, o premio correspondente e dividido.
+                  </p>
+                </div>
+              </div>
+            </details>
+
             {meusPremios.length > 0 && (
               <div className="bg-yellow-50 border border-yellow-300 rounded-2xl p-4 mb-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

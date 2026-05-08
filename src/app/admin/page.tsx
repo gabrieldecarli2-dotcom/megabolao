@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { closeExpiredRounds, formatRoundDeadline } from '@/lib/rounds'
 import { BarChart3, ClipboardList, Settings, TicketCheck, Trophy, UserRound, Users } from 'lucide-react'
+import { formatWhatsapp } from '@/lib/phone'
 
 type Tab = 'painel' | 'ranking' | 'participantes' | 'sorteios' | 'premiacao' | 'usuarios'
 
@@ -687,6 +688,9 @@ export default function AdminPage() {
 
   const totalPago = entries.filter(e => e.payment_status === 'paid').length
   const totalPendente = entries.filter(e => e.payment_status === 'pending').length
+  const pendingManualEntries = entries.filter((entry: any) =>
+    entry.payment_status === 'pending' && (!entry.payment_id || (entry.payments?.method || 'manual') === 'manual')
+  )
   const valorRodada = Number(round?.ticket_price || 50)
   const receitaTotal = totalPago * valorRodada
   const encerrada = round?.status === 'finished'
@@ -1211,7 +1215,7 @@ export default function AdminPage() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="text-xs text-gray-500">{round?.nome}</div>
-                {round?.status !== 'finished' && (
+                {round?.status !== 'finished' && pendingManualEntries.length > 0 && (
                   <button onClick={async () => {
                     const manualPaymentIds = Array.from(new Set(
                       entries
@@ -1253,6 +1257,7 @@ export default function AdminPage() {
                 {paginatedParticipantGroups.map((group: any) => {
                   const isOpen = expandedParticipantId === group.userId
                   const pixKey = group.user?.pix_key || ''
+                  const allPrizesPaid = group.awardedCount > 0 && group.paidPrizeCount === group.awardedCount
 
                   return (
                     <div key={group.userId}>
@@ -1283,11 +1288,11 @@ export default function AdminPage() {
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {group.awardedCount > 0 && (
-                            <span className="rounded-lg bg-yellow-50 px-3 py-1.5 text-xs font-black text-yellow-700">
+                            <span className={'rounded-lg px-3 py-1.5 text-xs font-black ' + (allPrizesPaid ? 'bg-gray-100 text-gray-500' : 'bg-yellow-50 text-yellow-700')}>
                               R${group.prizeTotal.toFixed(2)}
                             </span>
                           )}
-                          {pixKey && group.awardedCount > 0 && (
+                          {pixKey && group.awardedCount > 0 && !allPrizesPaid && (
                             <span
                               onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(pixKey) }}
                               className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600"
@@ -1374,7 +1379,7 @@ export default function AdminPage() {
                                 <div className="flex items-center justify-between gap-3 shrink-0 sm:justify-end">
                                   <div className="text-right">
                                     {isAwarded && (
-                                      <div className="text-sm font-black text-yellow-600">R${entryPrizeTotal.toFixed(2)}</div>
+                                      <div className={'text-sm font-black ' + (prizePaid ? 'text-gray-400' : 'text-yellow-600')}>R${entryPrizeTotal.toFixed(2)}</div>
                                     )}
                                     <div className={'text-2xl font-black ' + (isCancelled ? 'text-gray-300' : 'text-blue-600')}>{displayedHits}</div>
                                     <div className="text-xs text-gray-400">acertos</div>
@@ -1635,7 +1640,7 @@ export default function AdminPage() {
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">WhatsApp</label>
-                  <input value={novoUsuarioTelefone} onChange={e => setNovoUsuarioTelefone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="(11) 99999-9999" />
+                  <input value={novoUsuarioTelefone} onChange={e => setNovoUsuarioTelefone(formatWhatsapp(e.target.value))} maxLength={15} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="(11) 99999-9999" />
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Senha temporaria</label>

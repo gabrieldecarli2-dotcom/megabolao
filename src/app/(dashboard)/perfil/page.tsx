@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/shared/Navbar'
 import { supabase } from '@/lib/supabase'
+import { formatWhatsapp } from '@/lib/phone'
 
 type Profile = {
   id: string
@@ -44,7 +45,7 @@ export default function PerfilPage() {
       const userProfile = data as Profile | null
       setProfile(userProfile)
       setNome(userProfile?.nome || '')
-      setTelefone(userProfile?.telefone || '')
+      setTelefone(formatWhatsapp(userProfile?.telefone || ''))
       setPixKey(userProfile?.pix_key || '')
       setEmail(authUser.email || '')
       setLoading(false)
@@ -152,9 +153,10 @@ export default function PerfilPage() {
                   <input
                     type="tel"
                     value={telefone}
-                    onChange={e => setTelefone(e.target.value)}
+                    onChange={e => setTelefone(formatWhatsapp(e.target.value))}
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="(11) 99999-9999"
+                    maxLength={15}
                   />
                 </div>
 
