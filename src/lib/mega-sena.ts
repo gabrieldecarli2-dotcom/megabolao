@@ -9,7 +9,8 @@ export type MegaSenaLatestResult = {
   source: string
 }
 
-const MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
+const CAIXA_MEGA_SENA_LATEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
+const FALLBACK_MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
 
 function parseBrazilianDate(date: unknown) {
   if (typeof date !== 'string') return null
@@ -27,8 +28,8 @@ function parseNumbers(numbers: unknown) {
     .sort((a, b) => a - b)
 }
 
-export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult> {
-  const response = await fetch(MEGA_SENA_LATEST_URL, {
+async function fetchJson(url: string) {
+  const response = await fetch(url, {
     headers: {
       Accept: 'application/json',
     },
@@ -39,7 +40,33 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
     throw new Error('Nao foi possivel consultar a API da Mega-Sena.')
   }
 
-  const result = await response.json()
+  return response.json()
+}
+
+function normalizeCaixaResult(result: Record<string, unknown>): MegaSenaLatestResult {
+  const drawDate = parseBrazilianDate(result?.dataApuracao)
+  const nextDrawDate = parseBrazilianDate(result?.dataProximoConcurso)
+  const numbers = parseNumbers(result?.listaDezenas)
+  const contestNumber = result?.numero ? String(result.numero) : ''
+  const nextContestNumber = result?.numeroConcursoProximo ? String(result.numeroConcursoProximo) : null
+
+  if (!contestNumber || !drawDate || numbers.length !== 6) {
+    throw new Error('A API da Caixa retornou um resultado incompleto.')
+  }
+
+  return {
+    contestNumber,
+    drawDate,
+    numbers,
+    originalDate: String(result.dataApuracao),
+    nextContestNumber,
+    nextDrawDate,
+    originalNextDrawDate: result.dataProximoConcurso ? String(result.dataProximoConcurso) : null,
+    source: CAIXA_MEGA_SENA_LATEST_URL,
+  }
+}
+
+function normalizeFallbackResult(result: Record<string, unknown>): MegaSenaLatestResult {
   const drawDate = parseBrazilianDate(result?.data)
   const nextDrawDate = parseBrazilianDate(result?.dataProximoConcurso)
   const numbers = parseNumbers(result?.dezenas)
@@ -54,10 +81,21 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
     contestNumber,
     drawDate,
     numbers,
-    originalDate: result.data,
+    originalDate: String(result.data),
     nextContestNumber,
     nextDrawDate,
-    originalNextDrawDate: result.dataProximoConcurso || null,
-    source: MEGA_SENA_LATEST_URL,
+    originalNextDrawDate: result.dataProximoConcurso ? String(result.dataProximoConcurso) : null,
+    source: FALLBACK_MEGA_SENA_LATEST_URL,
+  }
+}
+
+export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult> {
+  try {
+    const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL)
+    return normalizeCaixaResult(caixaResult)
+  } catch (error) {
+    console.error('Falha ao consultar API oficial da Caixa, usando fallback', error)
+    const fallbackResult = await fetchJson(FALLBACK_MEGA_SENA_LATEST_URL)
+    return normalizeFallbackResult(fallbackResult)
   }
 }
