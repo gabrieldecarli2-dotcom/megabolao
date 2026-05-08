@@ -7,9 +7,11 @@ export type MegaSenaLatestResult = {
   nextDrawDate: string | null
   originalNextDrawDate: string | null
   source: string
+  providerErrors?: string[]
 }
 
 const CAIXA_MEGA_SENA_LATEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
+const CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/'
 const FALLBACK_MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
 
 function parseBrazilianDate(date: unknown) {
@@ -28,19 +30,27 @@ function parseNumbers(numbers: unknown) {
     .sort((a, b) => a - b)
 }
 
-async function fetchJson(url: string) {
+const CAIXA_HEADERS = {
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Cache-Control': 'no-cache',
+  Pragma: 'no-cache',
+  Referer: 'https://loterias.caixa.gov.br/',
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+}
+
+async function fetchJson(url: string, headers: Record<string, string> = { Accept: 'application/json' }) {
   const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-    },
+    headers,
     cache: 'no-store',
   })
 
   if (!response.ok) {
-    throw new Error('Nao foi possivel consultar a API da Mega-Sena.')
+    throw new Error(`Nao foi possivel consultar a API da Mega-Sena (${response.status}).`)
   }
 
-  return response.json()
+  const text = await response.text()
+  return JSON.parse(text)
 }
 
 function normalizeCaixaResult(result: Record<string, unknown>): MegaSenaLatestResult {
@@ -90,12 +100,35 @@ function normalizeFallbackResult(result: Record<string, unknown>): MegaSenaLates
 }
 
 export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult> {
+  const providerErrors: string[] = []
+
   try {
-    const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL)
+    const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH, CAIXA_HEADERS)
     return normalizeCaixaResult(caixaResult)
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido na API oficial da Caixa com barra.'
+    providerErrors.push(`caixa_slash: ${message}`)
+    console.error('Falha ao consultar API oficial da Caixa com barra', error)
+  }
+
+  try {
+    const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL, CAIXA_HEADERS)
+    return normalizeCaixaResult(caixaResult)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido na API oficial da Caixa.'
+    providerErrors.push(`caixa: ${message}`)
     console.error('Falha ao consultar API oficial da Caixa, usando fallback', error)
+  }
+
+  try {
     const fallbackResult = await fetchJson(FALLBACK_MEGA_SENA_LATEST_URL)
-    return normalizeFallbackResult(fallbackResult)
+    return {
+      ...normalizeFallbackResult(fallbackResult),
+      providerErrors,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido na API fallback.'
+    providerErrors.push(`fallback: ${message}`)
+    throw new Error(providerErrors.join(' | '))
   }
 }
