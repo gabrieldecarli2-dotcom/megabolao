@@ -12,6 +12,7 @@ export type MegaSenaLatestResult = {
 
 const CAIXA_MEGA_SENA_LATEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
 const CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/'
+const CAIXA_MEGA_SENA_CONTEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
 const FALLBACK_MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
 const FALLBACK_MEGA_SENA_CONTEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena'
 
@@ -52,6 +53,29 @@ async function fetchJson(url: string, headers: Record<string, string> = { Accept
 
   const text = await response.text()
   return JSON.parse(text)
+}
+
+async function fetchNewerCaixaContest(latestResult: MegaSenaLatestResult, providerErrors: string[]) {
+  if (!latestResult.nextContestNumber) return latestResult
+
+  try {
+    const nextContestUrl = `${CAIXA_MEGA_SENA_CONTEST_URL}/${latestResult.nextContestNumber}`
+    const nextContestResult = await fetchJson(nextContestUrl, CAIXA_HEADERS)
+    const normalizedNextContest = normalizeCaixaResult(nextContestResult)
+
+    if (Number(normalizedNextContest.contestNumber) > Number(latestResult.contestNumber)) {
+      return {
+        ...normalizedNextContest,
+        source: nextContestUrl,
+        providerErrors,
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido ao buscar proximo concurso na API oficial da Caixa.'
+    providerErrors.push(`caixa_next_contest: ${message}`)
+  }
+
+  return latestResult
 }
 
 function normalizeCaixaResult(result: Record<string, unknown>): MegaSenaLatestResult {
@@ -105,7 +129,8 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
 
   try {
     const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH, CAIXA_HEADERS)
-    return normalizeCaixaResult(caixaResult)
+    const normalizedCaixaResult = normalizeCaixaResult(caixaResult)
+    return fetchNewerCaixaContest(normalizedCaixaResult, providerErrors)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido na API oficial da Caixa com barra.'
     providerErrors.push(`caixa_slash: ${message}`)
@@ -114,7 +139,8 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
 
   try {
     const caixaResult = await fetchJson(CAIXA_MEGA_SENA_LATEST_URL, CAIXA_HEADERS)
-    return normalizeCaixaResult(caixaResult)
+    const normalizedCaixaResult = normalizeCaixaResult(caixaResult)
+    return fetchNewerCaixaContest(normalizedCaixaResult, providerErrors)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido na API oficial da Caixa.'
     providerErrors.push(`caixa: ${message}`)
