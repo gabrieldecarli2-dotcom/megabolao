@@ -13,6 +13,21 @@ export async function GET(request: NextRequest) {
   try {
     const result = await registerLatestMegaSenaDrawFromCron()
 
+    console.log('Resultado do cron da Mega-Sena', {
+      status: result.status,
+      reason: result.reason,
+      brazilNow: result.brazilNow,
+      latestContest: result.latestResult?.contestNumber,
+      latestDrawDate: result.latestResult?.drawDate,
+      latestSource: result.latestResult?.source,
+      providerErrors: result.latestResult?.providerErrors,
+      registrationStatus: result.registration?.status,
+      registrationReason: result.registration?.reason,
+      registeredContest: result.registration?.draw?.contest_number,
+      roundId: result.registration?.round?.id,
+      roundStatus: result.registration?.round?.status,
+    })
+
     return NextResponse.json({
       success: true,
       ...result,

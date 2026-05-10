@@ -51,6 +51,14 @@ function shouldTryAutomaticRegistration(latestResult: MegaSenaLatestResult) {
   const isExpectedDrawDate = latestResult.nextDrawDate === brazilNow.date
   const latestDrawIsToday = latestResult.drawDate === brazilNow.date
 
+  if (isExpectedDrawDate && !latestDrawIsToday) {
+    return {
+      shouldRun: false,
+      reason: 'result_not_published_yet',
+      brazilNow,
+    }
+  }
+
   if (!isExpectedDrawDate && !latestDrawIsToday) {
     return {
       shouldRun: false,
