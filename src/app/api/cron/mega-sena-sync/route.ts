@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { registerLatestMegaSenaDrawFromCron } from '@/lib/draw-registration'
+import { registerLatestMegaSenaDrawFromCron, registerMegaSenaDrawFromCronOverride } from '@/lib/draw-registration'
 
 export const runtime = 'nodejs'
 
@@ -11,16 +11,47 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await registerLatestMegaSenaDrawFromCron()
+    const contestNumber = request.nextUrl.searchParams.get('contestNumber')
+    const drawDate = request.nextUrl.searchParams.get('drawDate')
+    const numbersParam = request.nextUrl.searchParams.get('numbers')
+    const hasManualResult = contestNumber || drawDate || numbersParam
+
+    if (hasManualResult && (!contestNumber || !drawDate || !numbersParam)) {
+      return NextResponse.json(
+        { success: false, error: 'Informe contestNumber, drawDate e numbers para registro manual pelo cron.' },
+        { status: 400 },
+      )
+    }
+
+    const numbers = numbersParam
+      ?.split(',')
+      .map((number) => Number(number.trim()))
+      .filter((number) => Number.isInteger(number))
+
+    if (hasManualResult && (!numbers || numbers.length !== 6)) {
+      return NextResponse.json(
+        { success: false, error: 'Informe exatamente 6 numeros em numbers, separados por virgula.' },
+        { status: 400 },
+      )
+    }
+
+    const result = hasManualResult
+      ? await registerMegaSenaDrawFromCronOverride({
+          contestNumber: contestNumber!,
+          drawDate: drawDate!,
+          numbers: numbers!,
+        })
+      : await registerLatestMegaSenaDrawFromCron()
 
     console.log('Resultado do cron da Mega-Sena', {
+      mode: hasManualResult ? 'manual_override' : 'automatic',
       status: result.status,
       reason: result.reason,
-      brazilNow: result.brazilNow,
+      brazilNow: 'brazilNow' in result ? result.brazilNow : undefined,
       latestContest: result.latestResult?.contestNumber,
       latestDrawDate: result.latestResult?.drawDate,
       latestSource: result.latestResult?.source,
-      providerErrors: result.latestResult?.providerErrors,
+      providerErrors: 'providerErrors' in result.latestResult ? result.latestResult.providerErrors : undefined,
       registrationStatus: result.registration?.status,
       registrationReason: result.registration?.reason,
       registeredContest: result.registration?.draw?.contest_number,

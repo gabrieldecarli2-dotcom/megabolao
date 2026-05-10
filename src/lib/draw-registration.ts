@@ -239,3 +239,56 @@ export async function registerLatestMegaSenaDrawFromCron() {
     registration,
   }
 }
+
+export async function registerMegaSenaDrawFromCronOverride(payload: {
+  contestNumber: string
+  drawDate: string
+  numbers: number[]
+}) {
+  const supabaseAdmin = getSupabaseAdmin()
+
+  await supabaseAdmin.rpc('close_expired_rounds')
+
+  const { data: round } = await supabaseAdmin
+    .from('rounds')
+    .select('*')
+    .eq('status', 'closed')
+    .or(`start_date.is.null,start_date.lte.${payload.drawDate}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!round) {
+    return {
+      status: 'skipped',
+      reason: 'no_closed_round',
+      latestResult: {
+        contestNumber: payload.contestNumber,
+        drawDate: payload.drawDate,
+        numbers: uniqueSortedNumbers(payload.numbers),
+        source: 'cron_override',
+      },
+      registration: null,
+    }
+  }
+
+  const registration = await registerDrawForRound({
+    roundId: round.id,
+    contestNumber: payload.contestNumber,
+    drawDate: payload.drawDate,
+    numbers: payload.numbers,
+    source: 'cron',
+  })
+
+  return {
+    status: registration.status,
+    reason: registration.reason,
+    latestResult: {
+      contestNumber: payload.contestNumber,
+      drawDate: payload.drawDate,
+      numbers: uniqueSortedNumbers(payload.numbers),
+      source: 'cron_override',
+    },
+    registration,
+  }
+}
