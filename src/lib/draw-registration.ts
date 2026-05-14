@@ -38,31 +38,12 @@ function getBrazilDateTimeParts() {
 
 function shouldTryAutomaticRegistration(latestResult: MegaSenaLatestResult) {
   const brazilNow = getBrazilDateTimeParts()
-  const isAfterDrawPublicationWindow = brazilNow.hour >= 21 || brazilNow.hour <= 1
+  const latestDrawIsInFuture = latestResult.drawDate > brazilNow.date
 
-  if (!isAfterDrawPublicationWindow) {
+  if (latestDrawIsInFuture) {
     return {
       shouldRun: false,
-      reason: 'before_21_brt',
-      brazilNow,
-    }
-  }
-
-  const isExpectedDrawDate = latestResult.nextDrawDate === brazilNow.date
-  const latestDrawIsToday = latestResult.drawDate === brazilNow.date
-
-  if (isExpectedDrawDate && !latestDrawIsToday) {
-    return {
-      shouldRun: false,
-      reason: 'result_not_published_yet',
-      brazilNow,
-    }
-  }
-
-  if (!isExpectedDrawDate && !latestDrawIsToday) {
-    return {
-      shouldRun: false,
-      reason: 'not_expected_draw_date',
+      reason: 'future_draw_date',
       brazilNow,
     }
   }
@@ -98,6 +79,10 @@ export async function registerDrawForRound(payload: RegisterDrawPayload) {
 
   if (round.start_date && payload.drawDate < round.start_date) {
     return { status: 'skipped', reason: 'draw_before_round_start', round, draw: null }
+  }
+
+  if (round.end_date && payload.drawDate < round.end_date) {
+    return { status: 'skipped', reason: 'draw_before_round_end', round, draw: null }
   }
 
   const { data: existingDraw } = await supabaseAdmin

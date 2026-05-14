@@ -13,6 +13,7 @@ export type MegaSenaLatestResult = {
 const CAIXA_MEGA_SENA_LATEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
 const CAIXA_MEGA_SENA_LATEST_URL_WITH_SLASH = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/'
 const CAIXA_MEGA_SENA_CONTEST_URL = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena'
+const MEGA_SENA_COM_RESULTS_URL = 'https://www.megasena.com/resultados'
 const FALLBACK_MEGA_SENA_LATEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena/latest'
 const FALLBACK_MEGA_SENA_CONTEST_URL = 'https://loteriascaixa-api.herokuapp.com/api/megasena'
 
@@ -30,6 +31,27 @@ function parseNumbers(numbers: unknown) {
     .map((number) => Number(number))
     .filter((number) => Number.isInteger(number) && number >= 1 && number <= 60)
     .sort((a, b) => a - b)
+}
+
+function decodeHtmlEntities(text: string) {
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+}
+
+function htmlToTextLines(html: string) {
+  return decodeHtmlEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+      .replace(/<[^>]+>/g, '\n'),
+  )
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 const CAIXA_HEADERS = {
@@ -53,6 +75,19 @@ async function fetchJson(url: string, headers: Record<string, string> = { Accept
 
   const text = await response.text()
   return JSON.parse(text)
+}
+
+async function fetchText(url: string, headers: Record<string, string> = { Accept: 'text/plain' }) {
+  const response = await fetch(url, {
+    headers,
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Nao foi possivel consultar a API da Mega-Sena (${response.status}).`)
+  }
+
+  return response.text()
 }
 
 async function fetchNewerCaixaContest(latestResult: MegaSenaLatestResult, providerErrors: string[]) {
@@ -124,6 +159,47 @@ function normalizeFallbackResult(result: Record<string, unknown>): MegaSenaLates
   }
 }
 
+function normalizeMegaSenaComResult(html: string): MegaSenaLatestResult {
+  const lines = htmlToTextLines(html)
+  const contestIndex = lines.findIndex((line) => /^Concurso\s+\d+$/.test(line))
+
+  if (contestIndex === -1) {
+    throw new Error('Nao foi possivel encontrar o concurso no MegaSena.com.')
+  }
+
+  const contestNumber = lines[contestIndex].replace(/\D/g, '')
+  const drawDateLine = lines.slice(contestIndex + 1).find((line) => /^\d{2}\/\d{2}\/\d{4}$/.test(line))
+  const drawDate = parseBrazilianDate(drawDateLine)
+
+  if (!drawDateLine || !drawDate) {
+    throw new Error('Nao foi possivel encontrar a data do sorteio no MegaSena.com.')
+  }
+
+  const dateIndex = lines.indexOf(drawDateLine, contestIndex + 1)
+  const numbers = lines
+    .slice(dateIndex + 1)
+    .filter((line) => /^\d{1,2}$/.test(line))
+    .map((line) => Number(line))
+    .filter((number) => number >= 1 && number <= 60)
+    .slice(0, 6)
+    .sort((a, b) => a - b)
+
+  if (!contestNumber || numbers.length !== 6) {
+    throw new Error('O MegaSena.com retornou um resultado incompleto.')
+  }
+
+  return {
+    contestNumber,
+    drawDate,
+    numbers,
+    originalDate: drawDateLine,
+    nextContestNumber: null,
+    nextDrawDate: null,
+    originalNextDrawDate: null,
+    source: MEGA_SENA_COM_RESULTS_URL,
+  }
+}
+
 export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult> {
   const providerErrors: string[] = []
 
@@ -145,6 +221,17 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
     const message = error instanceof Error ? error.message : 'Erro desconhecido na API oficial da Caixa.'
     providerErrors.push(`caixa: ${message}`)
     console.error('Falha ao consultar API oficial da Caixa, usando fallback', error)
+  }
+
+  try {
+    const megaSenaComHtml = await fetchText(MEGA_SENA_COM_RESULTS_URL, { Accept: 'text/html,application/xhtml+xml' })
+    return {
+      ...normalizeMegaSenaComResult(megaSenaComHtml),
+      providerErrors,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido no MegaSena.com.'
+    providerErrors.push(`megasena_com: ${message}`)
   }
 
   try {
