@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { registerLatestMegaSenaDrawFromCron, registerMegaSenaDrawFromCronOverride } from '@/lib/draw-registration'
 
 export const runtime = 'nodejs'
+export const preferredRegion = 'gru1'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')

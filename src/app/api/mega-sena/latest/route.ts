@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { fetchLatestMegaSenaResult } from '@/lib/mega-sena'
 
 export const runtime = 'nodejs'
+export const preferredRegion = 'gru1'
 
 export async function GET(request: NextRequest) {
   const authUser = await getAuthenticatedUser(request)
