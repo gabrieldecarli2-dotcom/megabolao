@@ -240,6 +240,23 @@ export async function fetchLatestMegaSenaResult(): Promise<MegaSenaLatestResult>
 
     if (normalizedFallback.nextContestNumber) {
       try {
+        const caixaNextContestUrl = `${CAIXA_MEGA_SENA_CONTEST_URL}/${normalizedFallback.nextContestNumber}`
+        const caixaNextContestResult = await fetchJson(caixaNextContestUrl, CAIXA_HEADERS)
+        const normalizedCaixaNextContest = normalizeCaixaResult(caixaNextContestResult)
+
+        if (Number(normalizedCaixaNextContest.contestNumber) > Number(normalizedFallback.contestNumber)) {
+          return {
+            ...normalizedCaixaNextContest,
+            source: caixaNextContestUrl,
+            providerErrors,
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido ao buscar proximo concurso na Caixa usando referencia do fallback.'
+        providerErrors.push(`caixa_next_contest_from_fallback: ${message}`)
+      }
+
+      try {
         const nextContestResult = await fetchJson(`${FALLBACK_MEGA_SENA_CONTEST_URL}/${normalizedFallback.nextContestNumber}`)
         const normalizedNextContest = normalizeFallbackResult(nextContestResult)
 
